@@ -68,4 +68,6 @@ class SequentialWindowDataset(Dataset):
         return len(self.base) - self.steps
 
     def __getitem__(self, idx):
-        return [self.base[idx + k] for k in range(self.steps + 1)]  # list length = steps+1
+        return [
+            self.base[idx + k] for k in range(self.steps + 1)
+        ]  # list length = steps+1

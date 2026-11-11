@@ -39,7 +39,17 @@ Batch = namedtuple(
     ],
 )
 
-Metadata = namedtuple("Metadata", ["latitudes", "longitudes", "timestamp", "lead_time", "pressure_levels", "species_list"])
+Metadata = namedtuple(
+    "Metadata",
+    [
+        "latitudes",
+        "longitudes",
+        "timestamp",
+        "lead_time",
+        "pressure_levels",
+        "species_list",
+    ],
+)
 
 
 def normalize_keys(d: Dict[Union[int, str], torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -62,7 +72,9 @@ def custom_collate(batch_list):
     # If we're collating our Batch objects:
     if isinstance(batch_list[0], Batch):
 
-        def collate_dicts(dicts: List[Dict[Union[int, str], torch.Tensor]]) -> Dict[Union[int, str], torch.Tensor]:
+        def collate_dicts(
+            dicts: List[Dict[Union[int, str], torch.Tensor]],
+        ) -> Dict[Union[int, str], torch.Tensor]:
             out: Dict[Union[int, str], torch.Tensor] = {}
             keys = dicts[0].keys()
             for key in keys:
@@ -71,7 +83,9 @@ def custom_collate(batch_list):
                     shapes = [tuple(v.shape) for v in values]
                     if len(set(shapes)) != 1:
                         # fail loud & clear
-                        raise RuntimeError(f"[collate] key={key!r} has mismatched shapes: {shapes}")
+                        raise RuntimeError(
+                            f"[collate] key={key!r} has mismatched shapes: {shapes}"
+                        )
                     out[key] = torch.stack(values, dim=0)
                 else:
                     # keep lists (e.g. timestamps) as-is
@@ -134,7 +148,9 @@ def custom_collate(batch_list):
     return default_collate(batch_list)
 
 
-def crop_variables(variables, new_H, new_W, handle_nans=False, nan_mode="zero", fix_dim=False):
+def crop_variables(
+    variables, new_H, new_W, handle_nans=False, nan_mode="zero", fix_dim=False
+):
     """
     Crop and clean variables to specified dimensions, handling NaN and Inf values.
 
@@ -241,7 +257,9 @@ class LargeClimateDataset(Dataset):
         self.num_species = num_species
         self.atmos_levels = atmos_levels
         self.mode = mode
-        self.files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith(".pt")]
+        self.files = [
+            os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith(".pt")
+        ]
         self.max_files = max_files
         self.files.sort()
         if self.max_files:
@@ -249,7 +267,9 @@ class LargeClimateDataset(Dataset):
         self.scaling_settings = scaling_settings
         self.scaling_statistics = load_stats(scaling_settings.stats_path)
         self.model_patch_size = model_patch_size
-        print(f"We scale the dataset {scaling_settings.enabled} with {scaling_settings.mode}")
+        print(
+            f"We scale the dataset {scaling_settings.enabled} with {scaling_settings.mode}"
+        )
 
     def __len__(self):
         if self.mode == "pretrain":
@@ -281,11 +301,27 @@ class LargeClimateDataset(Dataset):
         atmospheric_vars = crop_variables(data["atmospheric_variables"], new_H, new_W)
         climate_vars = crop_variables(data["climate_variables"], new_H, new_W)
         species_vars = crop_variables(data["species_variables"], new_H, new_W)
-        land_vars = crop_variables(data["land_variables"], new_H, new_W)
-        agriculture_vars = crop_variables(data["agriculture_variables"], new_H, new_W)
-        forest_vars = crop_variables(data["forest_variables"], new_H, new_W)
+        land_vars = crop_variables(
+            data["land_variables"], new_H, new_W, handle_nans=True, nan_mode="zero"
+        )
+        agriculture_vars = crop_variables(
+            data["agriculture_variables"],
+            new_H,
+            new_W,
+            handle_nans=True,
+            nan_mode="zero",
+        )
+        forest_vars = crop_variables(
+            data["forest_variables"], new_H, new_W, handle_nans=True, nan_mode="zero"
+        )
         # For NDVI Nans due to snow/clouds => putting 0 = Values close to zero (-0.1 to 0.1) generally correspond to barren areas of rock, sand, or snow
-        vegetation_vars = crop_variables(data["vegetation_variables"], new_H, new_W, handle_nans=True, nan_mode="zero")
+        vegetation_vars = crop_variables(
+            data["vegetation_variables"],
+            new_H,
+            new_W,
+            handle_nans=True,
+            nan_mode="zero",
+        )
         redlist_vars = crop_variables(data["redlist_variables"], new_H, new_W)
         misc_vars = crop_variables(data["misc_variables"], new_H, new_W)
         # crop metadata dimensions
@@ -296,7 +332,9 @@ class LargeClimateDataset(Dataset):
         # Convert the two timestamps into datetime objects
         start = datetime.strptime(timestamps[0], dt_format)
         end = datetime.strptime(timestamps[1], dt_format)
-        atmospheric_vars = extract_atmospheric_levels(atmospheric_vars, pressure_levels, self.atmos_levels, level_dim=1)
+        atmospheric_vars = extract_atmospheric_levels(
+            atmospheric_vars, pressure_levels, self.atmos_levels, level_dim=1
+        )
         # Compute lead time in hours
         # lead_time_hours = (end - start).total_seconds() / 86400.0 # Its days now
         # Compute lead time in months
@@ -339,7 +377,9 @@ class LargeClimateDataset(Dataset):
             x = self.load_and_process_files(fpath_x)
             return x
 
-    def scale_batch(self, batch: dict | Batch, direction: Literal["original", "scaled"] = "scaled"):
+    def scale_batch(
+        self, batch: dict | Batch, direction: Literal["original", "scaled"] = "scaled"
+    ):
         """
         Scale a batch of data back or forward.
         """
@@ -388,7 +428,9 @@ def extract_atmospheric_levels(
         try:
             idxs.append(all_levels.index(lvl))
         except ValueError:
-            raise ValueError(f"Level {lvl!r} not found in available levels {all_levels}")
+            raise ValueError(
+                f"Level {lvl!r} not found in available levels {all_levels}"
+            )
 
     # Build a 1D index tensor on the same device our data
     device = next(iter(atmos_vars.values())).device
@@ -475,16 +517,30 @@ def compute_batch_statistics(batch: Batch) -> dict:
         return group_stats
 
     # For each field in the Batch namedtuple that is a dictionary, compute stats
-    stats_result["surface_variables"] = process_var_dict(batch.surface_variables, "surface_variables")
-    stats_result["single_variables"] = process_var_dict(batch.single_variables, "single_variables")
-    stats_result["atmospheric_variables"] = process_var_dict(batch.atmospheric_variables, "atmospheric_variables")
+    stats_result["surface_variables"] = process_var_dict(
+        batch.surface_variables, "surface_variables"
+    )
+    stats_result["single_variables"] = process_var_dict(
+        batch.single_variables, "single_variables"
+    )
+    stats_result["atmospheric_variables"] = process_var_dict(
+        batch.atmospheric_variables, "atmospheric_variables"
+    )
     stats_result["species_extinction_variables"] = process_var_dict(
         batch.species_extinction_variables, "species_extinction_variables"
     )
-    stats_result["land_variables"] = process_var_dict(batch.land_variables, "land_variables")
-    stats_result["agriculture_variables"] = process_var_dict(batch.agriculture_variables, "agriculture_variables")
-    stats_result["forest_variables"] = process_var_dict(batch.forest_variables, "forest_variables")
-    stats_result["species_variables"] = process_var_dict(batch.species_variables, "species_variables")
+    stats_result["land_variables"] = process_var_dict(
+        batch.land_variables, "land_variables"
+    )
+    stats_result["agriculture_variables"] = process_var_dict(
+        batch.agriculture_variables, "agriculture_variables"
+    )
+    stats_result["forest_variables"] = process_var_dict(
+        batch.forest_variables, "forest_variables"
+    )
+    stats_result["species_variables"] = process_var_dict(
+        batch.species_variables, "species_variables"
+    )
 
     return stats_result
 
@@ -502,7 +558,12 @@ def test_dataset_and_dataloader(data_dir):
     Test function to inspect correctness.
     Print distinctive info from a single batch.
     """
-    dataset = LargeClimateDataset(data_dir, num_species=10, scaling_settings=scaling_object, example_model_patch_size=4)
+    dataset = LargeClimateDataset(
+        data_dir,
+        num_species=10,
+        scaling_settings=scaling_object,
+        example_model_patch_size=4,
+    )
     dataloader = DataLoader(
         dataset,
         batch_size=1,
@@ -689,7 +750,9 @@ def inspect_batch_nans(batch, tag: str = ""):
             n_inf = torch.isinf(data).sum().item()
             if n_nan or n_inf:
                 total = data.numel()
-                print(f"  {group_name}:{var:20s}  NaN={n_nan}/{total}  Inf={n_inf}/{total}")
+                print(
+                    f"  {group_name}:{var:20s}  NaN={n_nan}/{total}  Inf={n_inf}/{total}"
+                )
     print("================================")
 
 
@@ -770,7 +833,9 @@ def detach_output_dict(d):
 
 
 # V1> Works
-def _convert(obj: Any, move_cpu: bool = True, target_dtype: torch.dtype = torch.float32) -> Any:
+def _convert(
+    obj: Any, move_cpu: bool = True, target_dtype: torch.dtype = torch.float32
+) -> Any:
     """Recursively convert to plain-Python containers; move tensors to CPU."""
     if isinstance(obj, torch.Tensor):
         t = obj.detach()
@@ -794,5 +859,7 @@ def _convert(obj: Any, move_cpu: bool = True, target_dtype: torch.dtype = torch.
 
 
 if __name__ == "__main__":
-    data_path = "/projects/prjs1134/data/projects/biodt/storage/final_dataset_monthly/train"
+    data_path = (
+        "/projects/prjs1134/data/projects/biodt/storage/final_dataset_monthly/train"
+    )
     test_dataset_and_dataloader(data_path)
